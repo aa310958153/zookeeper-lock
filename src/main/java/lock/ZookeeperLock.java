@@ -105,6 +105,7 @@ public class ZookeeperLock {
             //如果加锁线程非当前线程抛出异常
             if (Thread.currentThread() != getExclusiveOwnerThread())
                 throw new IllegalMonitorStateException();
+            //根据节点存储的值校验是否是当前线程加锁。如果不是抛出异常
             String value;
             try {
                 value= new String(curatorFramework.getData().forPath(getLockPath()));
@@ -123,6 +124,7 @@ public class ZookeeperLock {
                 setExclusiveOwnerThread(null);
                 String path= getLockPath();
                 try {
+                    //删除节点 会触发节点监听
                     curatorFramework.delete().forPath(path);
                 } catch (Exception e) {
                     throw new IllegalMonitorStateException();
