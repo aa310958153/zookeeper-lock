@@ -1,1 +1,2 @@
 基于AQS+zookeeper实现的分布式独占锁
+仅用于学习AQS，业务需要使用的话使用Curator基于Zookeeper对锁的实现
