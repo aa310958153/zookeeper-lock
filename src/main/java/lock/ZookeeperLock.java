@@ -135,6 +135,10 @@ public class ZookeeperLock {
             return free;
         }
 
+        /**
+         * zookeeper保存临时节点实现加锁
+         * @return
+         */
         public boolean zkLock() {
             String path= getLockPath();
             boolean haveLock=false;
@@ -146,12 +150,15 @@ public class ZookeeperLock {
                         .forPath(path, syncValue.get().getValue().getBytes(StandardCharsets.UTF_8));
 
                 haveLock= true;
-            } catch (org.apache.zookeeper.KeeperException.NodeExistsException e) {
+            } catch (org.apache.zookeeper.KeeperException.NodeExistsException e) {//重复的标识未获取到锁
                 haveLock=false;
             } catch (Exception e) {
                 e.printStackTrace();
                 haveLock= false;
             }
+            /**
+             * 未获取到锁监听永久节点
+             */
             if(!haveLock){
                 TreeCache treeCache = new TreeCache(CuratorClient.getCurator(), SYN_SWITCH_ZK_NODE);
                 try {
@@ -166,12 +173,14 @@ public class ZookeeperLock {
                             ChildData eventData = event.getData();
                             switch (event.getType()) {
                                 case NODE_ADDED:
-                                    System.out.println(path + "节点添加:" + eventData.getPath() + "\t添加数据为：" + new String(eventData.getData()));
+                                    //System.out.println(path + "节点添加:" + eventData.getPath() + "\t添加数据为：" + new String(eventData.getData()));
                                     break;
                                 case NODE_UPDATED:
-                                    System.out.println(eventData.getPath() + "节点数据更新\t更新数据为：" + new String(eventData.getData()) + "\t版本为：" + eventData.getStat().getVersion());
+                                  //  System.out.println(eventData.getPath() + "节点数据更新\t更新数据为：" + new String(eventData.getData()) + "\t版本为：" + eventData.getStat().getVersion());
                                     break;
                                 case NODE_REMOVED:
+                                    //监听到节点删除。表示锁正常释放 或者持有锁的服务断开连接
+                                    //获得第一个阻塞线程 唤醒 尝试获取锁
                                     Thread firstThread=getFirstQueuedThread();
                                     if( firstThread!=null) {
                                         LockSupport.unpark(firstThread);
@@ -188,13 +197,26 @@ public class ZookeeperLock {
             return haveLock;
         }
 
+        /**
+         * 加锁的节点
+         * @return
+         */
         public String getLockPath(){
             String path = SYN_SWITCH_ZK_NODE + "/"+key;
             return path;
         }
 
+        /**
+         * 用于生产当前线程加锁相关值
+         */
         public static  class HoldCounter{
+            /**
+             * zookeeper获取锁成功保存的值。释放锁的时候需要判断zookeeper节点值是否和当前线程一直。用来判断是否是当前线程持有锁
+             */
             private String value= UUID.randomUUID().toString().replace("-","");
+            /**
+             * 因为会自旋。避免未获取到锁 多次重复监听
+             */
             private boolean isAddListener=false;
 
             public String getValue() {
